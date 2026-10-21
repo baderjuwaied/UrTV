@@ -14,13 +14,14 @@ import java.util.regex.Pattern;
 
 /** Pulls the latest page from GitHub so screen changes reach the TV without a new APK. */
 final class Updater {
+    // this fork's page (with the news line); photos and fonts still come from tshi-dev/UrTV through PhotoCache
     static final String URL_PAGE =
-        PhotoCache.REPO + "dist/tv.html";
+        "https://raw.githubusercontent.com/baderjuwaied/UrTV/" + BuildConfig.BRANCH + "/dist/tv.html";
     static final long INTERVAL_MS = 6L * 3600 * 1000;
 
     private static final String OFF = "التحديث التلقائي متوقف";
     private static final String RECENT = "تم الفحص مؤخراً";
-    private static final String LATEST_URL = "https://github.com/tshi-dev/UrTV/releases/latest";
+    private static final String LATEST_URL = "https://github.com/baderjuwaied/UrTV/releases/latest";
     private static final Pattern TAG = Pattern.compile("v(\\d+\\.\\d+)$");
 
     private Updater() {}

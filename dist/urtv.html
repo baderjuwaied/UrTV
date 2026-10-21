@@ -28,7 +28,8 @@
   /* card-only mode for the launcher */
   html.widget,html.widget body{background:transparent}
   html.widget .photo,html.widget .veil,html.widget .grain,html.widget .top-veil,html.widget .bottom-veil,
-  html.widget .dimmer,html.widget #credit,html.widget .top,html.widget .clockwrap,html.widget .bottom{display:none}
+  html.widget .dimmer,html.widget #credit,html.widget .top,html.widget .clockwrap,html.widget .bottom,
+  html.widget .news{display:none}
   html.widget .stage{height:auto;padding:0;display:block;transition:none}
   html.widget .mid{display:block}
   html.widget .week{width:100%}
@@ -241,6 +242,19 @@
   .stage{transition:transform 3s ease}
   .sc{color:#E0BA74;letter-spacing:.02em}
 
+  /* ===== news line under the bottom row: one headline at a time, no scrolling (a scroll redraws all day) ===== */
+  html.has-news .stage{grid-template-rows:auto 1fr auto auto}
+  .news{display:none;align-items:center;gap:1.1vw;min-width:0;
+    font-size:clamp(14px,1.18vw,24px);color:var(--sand)}
+  html.has-news .news{display:flex}
+  .news .tag{flex-shrink:0;padding:.22em .85em .32em;border-radius:999px;
+    background:rgba(220,184,111,.16);color:#F1CF8A;font-weight:500;font-size:.8em;letter-spacing:.06em}
+  .news .tag.urgent{background:rgba(238,106,80,.88);color:#FFFCF2}
+  .news .hl{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;
+    padding-bottom:.3em;margin-bottom:-.3em}
+  .news .meta{flex-shrink:0;color:#C6BBA4;font-weight:300;font-size:.82em;white-space:nowrap}
+  .news.flip .hl,.news.flip .meta{animation:weekIn .5s ease both}
+
   @media (max-aspect-ratio:5/4){
     .top{flex-direction:column-reverse;gap:1.4vh}
     .bottom{grid-template-columns:1fr 1fr}
@@ -314,6 +328,12 @@
     </div>
   </footer>
 
+  <div class="news" id="news">
+    <span class="tag" id="news-tag">الأخبار</span>
+    <span class="hl" id="news-hl"></span>
+    <span class="meta" id="news-meta"></span>
+  </div>
+
 </main>
 
 <script>
@@ -356,6 +376,8 @@ const CONFIG = {
     minRating: _num('minrating', 7),
   },
   weekWindowDays: 7,
+  // news line: #news=aljazeera,alarabiya,... (keys of NEWS_SOURCES); #news=0 turns it off
+  news: _Q.get('news') === '0' ? [] : (_list('news').length ? _list('news') : ['aljazeera','alarabiya','bbc']),
   // #widget=1: only the card, on a transparent page (the launcher's home screen shows it)
   widget: _Q.get('widget') === '1',
 };
@@ -890,6 +912,78 @@ async function loadTicker(t){
   }catch(e){ if(!document.getElementById(t.chg).textContent) paintDir(t, null); }   // offline: keep the arrow on screen
 }
 
+// ===== news line: Arabic RSS feeds, newest first, taking turns between sources =====
+const NEWS_SOURCES = {
+  aljazeera: {name:'الجزيرة', url:'https://www.aljazeera.net/aljazeerarss/a7c186be-1baa-4bd4-9d80-a84db769f779/73d0e1b4-532f-45ef-b135-bfdff8b8cab9'},
+  alarabiya: {name:'العربية', url:'https://www.alarabiya.net/feed/rss2/ar.xml'},
+  bbc:       {name:'BBC عربي', url:'https://feeds.bbci.co.uk/arabic/rss.xml'},
+  skynews:   {name:'سكاي نيوز عربية', url:'https://www.skynewsarabia.com/rss'},
+};
+const NEWS_MAX_AGE = 12*3600*1000;
+let NEWS = [], NEWS_I = 0;
+
+// feeds have no CORS headers: directly first (works inside the app), then the same public gateways as Yahoo
+async function fetchFeed(url){
+  const routes = [
+    [url, 8000],
+    ['https://api.allorigins.win/raw?url=' + encodeURIComponent(url), 15000],
+    ['https://corsproxy.io/?url=' + encodeURIComponent(url), 12000],
+  ];
+  for(const [u, ms] of routes){
+    try{
+      const r = await fetchT(u, ms);
+      if(!r.ok) continue;
+      const t = await r.text();
+      if(/<(item|entry)[\s>]/.test(t)) return t;
+    }catch(e){}
+  }
+  throw 0;
+}
+
+function parseFeed(xml, name){
+  const doc = new DOMParser().parseFromString(xml, 'text/xml');
+  const txt = (el, tags) => { for(const t of tags){ const n = el.getElementsByTagName(t)[0]; if(n && n.textContent.trim()) return n.textContent.trim(); } return ''; };
+  return [...doc.querySelectorAll('item, entry')].map(el => {
+    const title = txt(el, ['title']).replace(/\s+/g, ' ');
+    const when = Date.parse(txt(el, ['pubDate','published','updated','dc:date']));
+    return {title, t: isNaN(when) ? 0 : when, src: name};
+  }).filter(x => x.title);
+}
+
+async function loadNews(){
+  const keys = CONFIG.news.filter(k => NEWS_SOURCES[k]);
+  if(!keys.length) return;
+  const got = await Promise.allSettled(keys.map(k => fetchFeed(NEWS_SOURCES[k].url).then(x => parseFeed(x, NEWS_SOURCES[k].name))));
+  const now = Date.now(), seen = new Set();
+  const lists = got.filter(g => g.status === 'fulfilled').map(g => g.value
+    .filter(x => !x.t || now - x.t < NEWS_MAX_AGE)
+    .filter(x => !seen.has(x.title) && seen.add(x.title))
+    .sort((a, b) => b.t - a.t).slice(0, 6));
+  const out = [];
+  for(let i = 0; i < 6; i++) lists.forEach(l => { if(l[i]) out.push(l[i]); });
+  if(!out.length) return;   // offline or every feed failed: keep what is on screen
+  NEWS = out; NEWS_I = 0;
+  document.documentElement.classList.add('has-news');
+  showNews(false);
+}
+
+function showNews(flip){
+  if(!NEWS.length) return;
+  const n = NEWS[NEWS_I % NEWS.length];
+  const urgent = /عاجل/.test(n.title);
+  const tag = document.getElementById('news-tag');
+  tag.textContent = urgent ? 'عاجل' : 'الأخبار';
+  tag.classList.toggle('urgent', urgent);
+  document.getElementById('news-hl').textContent = n.title.replace(/^\s*عاجل\s*[|:：\-–—]*\s*/, '');
+  let ago = '';
+  if(n.t){
+    const m = Math.max(1, Math.round((Date.now() - n.t) / 60000));
+    ago = m < 60 ? `منذ ${ar(m)} د` : `منذ ${ar(Math.round(m / 60))} س`;
+  }
+  document.getElementById('news-meta').textContent = n.src + (ago ? '  ·  ' + ago : '');
+  if(flip){ const el = document.getElementById('news'); el.classList.remove('flip'); void el.offsetWidth; el.classList.add('flip'); }
+}
+
 const SKIP_TYPES = ['News','Talk Show','Sports','Game Show'];
 let NET_OK = 0;   // answers received; a refresh that got none must not replace what is on screen
 async function getJSON(url, fallback){
@@ -1256,8 +1350,11 @@ function boot(){
   else if(CONFIG.panel !== 'shows') renderPanel(false);   // its own data arrives with prayers, weather, matches
   loadPrayers(); loadMatches(); if(CONFIG.panel === 'shows') loadWeek(); loadWeather();
   applyNight(); pixelShift();
+  loadNews();
 
   setInterval(tickClock, 1000);
+  setInterval(loadNews, 10*60*1000);
+  setInterval(() => { NEWS_I++; showNews(true); }, 9000);
   setInterval(()=>{ tickDates(); tickPrayer(); tickRamadan(); if(CONFIG.panel === 'prayers') renderPanel(false); }, 15000);
   setInterval(() => renderMatches(false), 60000);
   setInterval(() => renderMatches(true), CONFIG.matchPageMs);
