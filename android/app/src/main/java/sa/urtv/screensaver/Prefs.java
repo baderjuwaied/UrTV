@@ -99,6 +99,15 @@ final class Prefs {
         {"matches", "مباريات فرقك القادمة"}, {"verse", "آية أو حديث اليوم"}, {"none", "لا شيء"},
     };
 
+    // The middle of the bottom row: value sent to the page (#mid=), Arabic label
+    static final String[][] MIDS = { {"ramadan", "كم باقي على رمضان"}, {"weather", "الطقس"} };
+    String mid() { return sp.getString("mid", "ramadan"); }
+    void setMid(String v) { sp.edit().putString("mid", v).apply(); }
+    static String midLabel(String v) {
+        for (String[] m : MIDS) if (m[0].equals(v)) return m[1];
+        return MIDS[0][1];
+    }
+
     /** Older builds had an on/off switch for the card; off becomes "none", otherwise the verse card. */
     String panel() { return sp.getString("panel", sp.getBoolean("showWeek", true) ? "verse" : "none"); }
     void setPanel(String v) { sp.edit().putString("panel", v).apply(); }
@@ -148,6 +157,7 @@ final class Prefs {
             + "&tz=" + Uri.encode(TZ)
             + "&teams=" + join(teamIds(), ",")
             + "&panel=" + panel()
+            + "&mid=" + mid()
             + "&week=" + ("none".equals(panel()) ? "0" : "1")   // for a page older than #panel
             + "&genres=" + Uri.encode(join(list("genres"), ","))
             + "&langs=" + Uri.encode(join(list("langs"), ","))

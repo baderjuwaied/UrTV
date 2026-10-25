@@ -219,6 +219,7 @@ def main():
     # 2 KB, so inlined in both pages
     html = html.replace("__F_MARKS__", data_uri(ROOT / "assets/fonts/NotoNaskhArabic-Marks.woff2", "font/woff2"))
     teams = json.loads((ROOT / "assets/shared/teams-ar.json").read_text(encoding="utf-8"))
+    html = html.replace("__LOGO__", data_uri(ROOT / "assets/brand/logo.png", "image/png"))   # this fork's company logo
     html = html.replace("__TEAMS_AR__", js_json(teams))
     # by TheSportsDB id: "Al-Faisaly" and "Al Faisaly" are different clubs under one name key
     clubs = json.loads((ROOT / "assets/shared/teams.json").read_text(encoding="utf-8"))

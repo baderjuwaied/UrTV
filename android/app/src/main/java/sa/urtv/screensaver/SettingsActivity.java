@@ -94,6 +94,9 @@ public class SettingsActivity extends Activity {
         header("بجانب الساعة");
         row("المحتوى", Prefs.panelLabel(prefs.panel()), R.drawable.ic_eye, new Runnable() { public void run() { pickPanel(false); } });
 
+        header("وسط الشريط السفلي");
+        row("المحتوى", Prefs.midLabel(prefs.mid()), R.drawable.ic_eye, new Runnable() { public void run() { pickMid(); } });
+
         header("الشاشة الرئيسية (تلفزيونك)");
         row("بطاقة على الشاشة الرئيسية", Prefs.panelLabel(prefs.homePanel()), R.drawable.ic_eye,
             new Runnable() { public void run() { pickPanel(true); } });
@@ -371,6 +374,18 @@ public class SettingsActivity extends Activity {
                 d.dismiss();
                 render();
             })
+            .show();
+    }
+
+    private void pickMid() {
+        String[] labels = new String[Prefs.MIDS.length];
+        int sel = 0;
+        for (int i = 0; i < labels.length; i++) {
+            labels[i] = Prefs.MIDS[i][1];
+            if (Prefs.MIDS[i][0].equals(prefs.mid())) sel = i;
+        }
+        new AlertDialog.Builder(this, DIALOG_THEME).setTitle("وسط الشريط السفلي")
+            .setSingleChoiceItems(labels, sel, (d, i) -> { prefs.setMid(Prefs.MIDS[i][0]); d.dismiss(); render(); })
             .show();
     }
 
